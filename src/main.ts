@@ -72,11 +72,14 @@ export default class DoneZonePlugin extends Plugin {
 
 	private setupAutoMove(): void {
 		this.registerEvent(
-			this.app.workspace.on("editor-change", (editor: Editor) => {
+			this.app.workspace.on("editor-change", () => {
 				if (this.isProcessing) return;
 
 				if (this.autoMoveTimer) clearTimeout(this.autoMoveTimer);
 				this.autoMoveTimer = setTimeout(() => {
+					const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+					if (!view) return;
+					const editor = view.editor;
 					this.returnUncheckedItems(editor);
 					if (this.settings.autoMove) {
 						this.moveCompletedItems(editor, true);
