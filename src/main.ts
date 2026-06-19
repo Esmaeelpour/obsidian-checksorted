@@ -464,17 +464,14 @@ export default class CheckSortedPlugin extends Plugin {
 		editor.setCursor({ line, ch: editor.getLine(line).length });
 		this.lastCursorLine = line;
 		this.lastCheckboxSnapshot = this.getCheckboxSnapshot(content);
-		requestAnimationFrame(() => {
+		activeWindow.requestAnimationFrame(() => {
 			editor.scrollTo(scroll.left, scroll.top);
 		});
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
+		const stored = (await this.loadData()) as Partial<CheckSortedSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
 	}
 
 	async saveSettings() {

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-checksorted",
-  "version": "1.0.29",
+  "version": "1.0.30",
   "description": "Move completed to-do items to a separate completed area.",
   "main": "main.js",
   "scripts": {
@@ -12,10 +12,11 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.38.6",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "8.0.0",
     "@typescript-eslint/parser": "8.0.0",
-    "builtin-modules": "3.3.0",
     "esbuild": "0.21.5",
     "obsidian": "latest",
     "tslib": "2.6.0",
