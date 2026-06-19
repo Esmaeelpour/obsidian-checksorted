@@ -21,7 +21,6 @@ export default class DoneZonePlugin extends Plugin {
 	statusBarEl: HTMLElement | null = null;
 
 	private isProcessing = false;
-	private autoMoveTimer: ReturnType<typeof setTimeout> | null = null;
 	private lastCursorLine = -1;
 
 	async onload() {
@@ -118,26 +117,11 @@ export default class DoneZonePlugin extends Plugin {
 					currentLine !== this.lastCursorLine;
 				this.lastCursorLine = currentLine;
 
-				if (this.autoMoveTimer) {
-					clearTimeout(this.autoMoveTimer);
-					this.autoMoveTimer = null;
-				}
-
 				if (lineChanged) {
 					this.returnUncheckedItems(editor);
 					if (this.settings.autoMove) {
 						this.moveCompletedItems(editor, true);
 					}
-				} else {
-					// Fallback for checkbox clicks where cursor doesn't move
-					this.autoMoveTimer = setTimeout(() => {
-						const v = this.app.workspace.getActiveViewOfType(MarkdownView);
-						if (!v || this.isProcessing) return;
-						this.returnUncheckedItems(v.editor);
-						if (this.settings.autoMove) {
-							this.moveCompletedItems(v.editor, true);
-						}
-					}, 2000);
 				}
 			})
 		);
