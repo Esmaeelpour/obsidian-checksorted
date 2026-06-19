@@ -148,11 +148,10 @@ export default class DoneZonePlugin extends Plugin {
 		if (!match) return;
 
 		const main = content.substring(0, match.index).trimEnd();
-		const afterHeader = content
-			.substring(match.index + match[0].length)
-			.trimStart();
+		const rawAfterHeader = content.substring(match.index + match[0].length);
+		const afterHeader = rawAfterHeader.trimStart();
 
-		// Use .* to also catch empty continuation lines (e.g. "- [ ] " after pressing Enter)
+		// .* also catches empty continuation lines created by pressing Enter
 		const uncheckedRegex = /^([ \t]*[-*+] \[ \] .*)\r?\n?/gm;
 		const uncheckedMatches = [...afterHeader.matchAll(uncheckedRegex)];
 
@@ -160,7 +159,7 @@ export default class DoneZonePlugin extends Plugin {
 
 		const cleanedSection = afterHeader.replace(uncheckedRegex, "").trimEnd();
 
-		// Only return items that have real content; empty continuation lines are just discarded
+		// Only return items with real content; empty continuation lines are discarded
 		const hasContent = /^[ \t]*[-*+] \[ \] \S/;
 		const returnedItems = uncheckedMatches
 			.filter((m) => hasContent.test(m[1]))
@@ -176,8 +175,27 @@ export default class DoneZonePlugin extends Plugin {
 			? `${newMain}\n\n${this.getHeaderStr()}\n${cleanedSection}`
 			: newMain;
 
-		// Land cursor on the last returned item; if nothing returned, end of main
-		const cursorLine = Math.max(0, newMain.split("\n").length - 1);
+		// Cursor adjustment:
+		// - lines removed above cursor (in completed section) shift it up
+		// - lines added to main (returned items) shift the completed section down
+		// Goal: land on the line that was below the removed item(s), staying in completed.
+		const preCursorLine = editor.getCursor().line;
+		const headerLine = content.substring(0, match.index).split("\n").length - 1;
+		const cursorInCompleted = preCursorLine > headerLine;
+
+		const leadingTrim = rawAfterHeader.length - afterHeader.length;
+		const afterHeaderDocLine =
+			content.substring(0, match.index + match[0].length + leadingTrim).split("\n").length - 1;
+
+		const removedAboveCursor = afterHeader
+			.split("\n")
+			.slice(0, Math.max(0, preCursorLine - afterHeaderDocLine))
+			.filter((l) => /^[ \t]*[-*+] \[ \] /.test(l)).length;
+
+		const cursorLine = Math.max(
+			0,
+			preCursorLine - removedAboveCursor + (cursorInCompleted ? returnedItems.length : 0)
+		);
 
 		this.isProcessing = true;
 		this.setValuePreservingScroll(editor, newContent, cursorLine);
