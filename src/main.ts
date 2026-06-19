@@ -73,14 +73,54 @@ export default class DoneZonePlugin extends Plugin {
 	private setupAutoMove(): void {
 		this.registerEvent(
 			this.app.workspace.on("editor-change", (editor: Editor) => {
-				if (!this.settings.autoMove || this.isProcessing) return;
+				if (this.isProcessing) return;
 
 				if (this.autoMoveTimer) clearTimeout(this.autoMoveTimer);
 				this.autoMoveTimer = setTimeout(() => {
-					this.moveCompletedItems(editor, true);
+					this.returnUncheckedItems(editor);
+					if (this.settings.autoMove) {
+						this.moveCompletedItems(editor, true);
+					}
 				}, 500);
 			})
 		);
+	}
+
+	private returnUncheckedItems(editor: Editor): void {
+		if (this.isProcessing) return;
+
+		const content = editor.getValue();
+		const headerRegex = this.getHeaderRegex();
+		const match = headerRegex.exec(content);
+
+		if (!match) return;
+
+		const main = content.substring(0, match.index).trimEnd();
+		const afterHeader = content
+			.substring(match.index + match[0].length)
+			.trimStart();
+
+		const uncheckedRegex = /^([ \t]*[-*+] \[ \] .+)\r?\n?/gm;
+		const uncheckedItems = [...afterHeader.matchAll(uncheckedRegex)].map(
+			(m) => m[1]
+		);
+
+		if (uncheckedItems.length === 0) return;
+
+		const cleanedSection = afterHeader.replace(uncheckedRegex, "").trimEnd();
+		const returnedItems = uncheckedItems.map((item) =>
+			item.replace(/\s*✅.*$/, "")
+		);
+
+		const returnedBlock = returnedItems.join("\n");
+		const newMain = main ? `${main}\n${returnedBlock}` : returnedBlock;
+		const newContent = cleanedSection
+			? `${newMain}\n\n${this.getHeaderStr()}\n${cleanedSection}`
+			: newMain;
+
+		this.isProcessing = true;
+		editor.setValue(newContent);
+		this.isProcessing = false;
 	}
 
 	private getHeaderStr(): string {
