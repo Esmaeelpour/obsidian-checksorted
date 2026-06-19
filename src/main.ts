@@ -22,6 +22,7 @@ export default class DoneZonePlugin extends Plugin {
 
 	private isProcessing = false;
 	private lastCursorLine = -1;
+	private lastLineContent = '';
 
 	async onload() {
 		await this.loadSettings();
@@ -100,6 +101,7 @@ export default class DoneZonePlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
 				this.lastCursorLine = -1;
+				this.lastLineContent = '';
 			})
 		);
 
@@ -111,19 +113,36 @@ export default class DoneZonePlugin extends Plugin {
 				if (!view) return;
 				const editor = view.editor;
 				const currentLine = editor.getCursor().line;
+				const currentLineContent = editor.getLine(currentLine);
 
 				const lineChanged =
 					this.lastCursorLine !== -1 &&
 					currentLine !== this.lastCursorLine;
-				this.lastCursorLine = currentLine;
 
-				if (lineChanged) {
+				const checkboxToggled =
+					!lineChanged &&
+					this.lastCursorLine !== -1 &&
+					this.isCheckboxToggle(this.lastLineContent, currentLineContent);
+
+				this.lastCursorLine = currentLine;
+				this.lastLineContent = currentLineContent;
+
+				if (lineChanged || checkboxToggled) {
 					this.returnUncheckedItems(editor);
 					if (this.settings.autoMove) {
 						this.moveCompletedItems(editor, true);
 					}
 				}
 			})
+		);
+	}
+
+	private isCheckboxToggle(before: string, after: string): boolean {
+		const unchecked = /^[ \t]*[-*+] \[ \] /;
+		const checked = /^[ \t]*[-*+] \[[xX]\] /;
+		return (
+			(unchecked.test(before) && checked.test(after)) ||
+			(checked.test(before) && unchecked.test(after))
 		);
 	}
 
@@ -208,7 +227,7 @@ export default class DoneZonePlugin extends Plugin {
 		const cursor = editor.getCursor();
 		const { main, completedItems: existing } = this.splitContent(content);
 
-		const completedRegex = /^([ \t]*[-*+] \[[xX]\] .+)\r?\n?/gm;
+		const completedRegex = /^([ \t]*[-*+] \[[xX]\] \S.*)\r?\n?/gm;
 		const newItems = [...main.matchAll(completedRegex)].map((m) => m[1]);
 
 		if (newItems.length === 0) {
@@ -217,7 +236,7 @@ export default class DoneZonePlugin extends Plugin {
 		}
 
 		// Count [x] lines removed above the cursor so we can land on the right line
-		const singleItemRegex = /^[ \t]*[-*+] \[[xX]\] .+/;
+		const singleItemRegex = /^[ \t]*[-*+] \[[xX]\] \S.*/;
 		const mainLines = main.split("\n");
 		let removedAbove = 0;
 		for (let i = 0; i < Math.min(cursor.line, mainLines.length); i++) {
@@ -311,6 +330,7 @@ export default class DoneZonePlugin extends Plugin {
 		);
 		editor.setCursor({ line, ch: editor.getLine(line).length });
 		this.lastCursorLine = line;
+		this.lastLineContent = editor.getLine(line);
 		requestAnimationFrame(() => {
 			if (cm?.scrollDOM) cm.scrollDOM.scrollTop = scrollTop;
 		});
