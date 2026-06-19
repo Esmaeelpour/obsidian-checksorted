@@ -176,7 +176,13 @@ export default class DoneZonePlugin extends Plugin {
 
 		if (uncheckedMatches.length === 0) return;
 
-		const cleanedSection = afterHeader.replace(uncheckedRegex, "").trimEnd();
+		// Also strip any empty "- [ ] " continuation lines that Obsidian inserts when
+		// Enter is pressed on an unchecked item. Otherwise a stray empty checkbox is left
+		// behind in the completed section and renders with a bullet (● ☐).
+		const cleanedSection = afterHeader
+			.replace(uncheckedRegex, "")
+			.replace(/^[ \t]*[-*+] \[ \][ \t]*(\r?\n|$)/gm, "")
+			.trimEnd();
 
 		const hasContent = /^[ \t]*[-*+] \[ \] \S/;
 		const returnedItems = uncheckedMatches
@@ -213,22 +219,10 @@ export default class DoneZonePlugin extends Plugin {
 			.slice(0, Math.max(0, preCursorLine - afterHeaderDocLine))
 			.filter((l) => removedPredicate.test(l)).length;
 
-		let cursorLine = Math.max(
+		const cursorLine = Math.max(
 			0,
 			preCursorLine - removedAboveCursor + (cursorInCompleted ? returnedItems.length : 0)
 		);
-
-		// If the computed line is a stray empty "- [ ] " continuation (cursor on it forces
-		// source-mode which shows "● ☐" instead of just "☐"), advance one line so it
-		// renders as a plain checkbox widget with no bullet visible.
-		const newLines = newContent.split("\n");
-		if (
-			!cleanEmpty &&
-			cursorInCompleted &&
-			/^[ \t]*[-*+] \[ \] \s*$/.test(newLines[cursorLine] ?? "")
-		) {
-			cursorLine = Math.min(cursorLine + 1, newLines.length - 1);
-		}
 
 		this.isProcessing = true;
 		this.setValuePreservingScroll(editor, newContent, cursorLine);
