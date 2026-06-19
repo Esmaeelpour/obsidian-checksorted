@@ -105,9 +105,17 @@ Unchecking an item in the completed area automatically returns it to the main li
 
 ## Installation
 
-### Using BRAT (recommended)
+### From Community Plugins
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) lets you install plugins directly from GitHub without waiting for community store approval.
+Once approved, DoneZone will be installable directly from Obsidian:
+
+1. Open **Settings → Community Plugins** and click **Browse**
+2. Search for **DoneZone**
+3. Click **Install**, then **Enable**
+
+### Using BRAT
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) lets you install plugins directly from GitHub before community store approval.
 
 1. Install **BRAT** from the Obsidian community plugins
 2. Open BRAT settings and click **Add Beta Plugin**
@@ -118,8 +126,8 @@ BRAT will also handle updates automatically.
 
 ### Manual
 
-1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/Esmaeelpour/obsidian-donezone/releases)
-2. Copy both files into your vault at `.obsidian/plugins/donezone/`
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Esmaeelpour/obsidian-donezone/releases)
+2. Copy all three files into your vault at `.obsidian/plugins/donezone/`
 3. Reload Obsidian and enable **DoneZone** in **Settings → Community Plugins**
 
 ---

@@ -70,38 +70,8 @@ export default class DoneZonePlugin extends Plugin {
 		this.addSettingTab(new CompletedAreaSettingTab(this.app, this));
 		this.registerEditorSuggest(new CheckboxSuggest(this));
 		this.registerEditorExtension(deleteButtonExtension(this));
-		this.injectStyles();
 		this.updateStatusBar();
 		this.setupAutoMove();
-	}
-
-	private injectStyles(): void {
-		const style = document.createElement("style");
-		style.id = "donezone-styles";
-		style.textContent = `
-.donezone-delete-task {
-	float: right;
-	margin-left: 8px;
-	padding: 0 4px;
-	color: var(--text-faint);
-	font-weight: bold;
-	line-height: 1;
-	border-radius: 4px;
-	cursor: pointer;
-	opacity: 0;
-	transition: opacity 80ms ease;
-}
-.cm-line:hover .donezone-delete-task {
-	opacity: 0.6;
-}
-.donezone-delete-task:hover {
-	opacity: 1;
-	color: var(--text-on-accent);
-	background-color: var(--text-error);
-}
-`;
-		document.head.appendChild(style);
-		this.register(() => style.remove());
 	}
 
 	updateRibbonIcon(): void {
@@ -131,9 +101,9 @@ export default class DoneZonePlugin extends Plugin {
 	updateStatusBar(): void {
 		if (this.settings.showStatusBar && !this.statusBarEl) {
 			this.statusBarEl = this.addStatusBarItem();
-			this.statusBarEl.style.cursor = "pointer";
-			this.statusBarEl.title = "Toggle DoneZone auto-move";
-			this.statusBarEl.addEventListener("click", async () => {
+			this.statusBarEl.addClass("donezone-status-bar");
+			this.statusBarEl.setAttribute("aria-label", "Toggle DoneZone auto-move");
+			this.registerDomEvent(this.statusBarEl, "click", async () => {
 				this.settings.autoMove = !this.settings.autoMove;
 				await this.saveSettings();
 				this.refreshStatusBar();
@@ -478,8 +448,7 @@ export default class DoneZonePlugin extends Plugin {
 		content: string,
 		cursorLine?: number
 	): void {
-		const cm = (editor as any).cm;
-		const scrollTop = cm?.scrollDOM?.scrollTop ?? 0;
+		const scroll = editor.getScrollInfo();
 		editor.setValue(content);
 		const line = Math.min(
 			cursorLine ?? editor.getCursor().line,
@@ -489,7 +458,7 @@ export default class DoneZonePlugin extends Plugin {
 		this.lastCursorLine = line;
 		this.lastCheckboxSnapshot = this.getCheckboxSnapshot(content);
 		requestAnimationFrame(() => {
-			if (cm?.scrollDOM) cm.scrollDOM.scrollTop = scrollTop;
+			editor.scrollTo(scroll.left, scroll.top);
 		});
 	}
 
@@ -581,8 +550,10 @@ class CheckboxSuggest extends EditorSuggest<CheckboxSuggestion> {
 	}
 
 	renderSuggestion(item: CheckboxSuggestion, el: HTMLElement): void {
-		const box = el.createSpan({ text: item.checked ? "☑ " : "☐ " });
-		box.style.opacity = "0.6";
+		el.createSpan({
+			cls: "donezone-suggest-state",
+			text: item.checked ? "☑" : "☐",
+		});
 		el.createSpan({ text: item.text });
 	}
 
@@ -601,10 +572,11 @@ class CheckboxSuggest extends EditorSuggest<CheckboxSuggestion> {
 // A clickable "×" rendered at the end of a checkbox line that deletes that line.
 class DeleteTaskWidget extends WidgetType {
 	toDOM(view: EditorView): HTMLElement {
-		const btn = document.createElement("span");
-		btn.className = "donezone-delete-task";
-		btn.textContent = "×";
-		btn.setAttribute("aria-label", "Delete task");
+		const btn = createSpan({
+			cls: "donezone-delete-task",
+			text: "×",
+			attr: { "aria-label": "Delete task" },
+		});
 		btn.addEventListener("mousedown", (e) => {
 			// Stop the editor from moving the cursor / starting a selection.
 			e.preventDefault();

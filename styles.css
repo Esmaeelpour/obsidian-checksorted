@@ -1,0 +1,34 @@
+/* Click-to-delete button on checkbox lines (Google Keep style) */
+.donezone-delete-task {
+	float: right;
+	margin-left: 8px;
+	padding: 0 4px;
+	color: var(--text-faint);
+	font-weight: bold;
+	line-height: 1;
+	border-radius: 4px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 80ms ease;
+}
+
+.cm-line:hover .donezone-delete-task {
+	opacity: 0.6;
+}
+
+.donezone-delete-task:hover {
+	opacity: 1;
+	color: var(--text-on-accent);
+	background-color: var(--text-error);
+}
+
+/* Task autocomplete suggestion */
+.donezone-suggest-state {
+	opacity: 0.6;
+	margin-right: 0.4em;
+}
+
+/* Status bar toggle */
+.donezone-status-bar {
+	cursor: pointer;
+}
