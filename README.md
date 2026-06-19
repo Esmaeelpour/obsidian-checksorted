@@ -93,8 +93,8 @@ Unchecking an item in the completed area automatically returns it to the main li
 | Header level | H2 | Heading level for the completed section |
 | Header name | `Completed` | Text of the completed section heading |
 | Show ribbon icon | On | Display the trigger icon in the left sidebar |
-| Show status bar toggle | Off | Show `CheckSorted ✓ / ✗` in the bottom status bar — click to toggle auto-move |
-| Auto-move on complete | Off | Automatically move items to the completed area when checked |
+| Show status bar toggle | On | Show `CheckSorted ✓ / ✗` in the bottom status bar — click to toggle auto-move |
+| Auto-move on complete | On | Automatically move items to the completed area when checked |
 | Show delete button | On | Show a × on the right of each checkbox line in the editor; click it to delete that task |
 | Task autocomplete | On | Suggest matching tasks while typing in a checkbox; selecting one moves it to the line you're typing |
 | Date stamp | Off | Append `✅ <date>` when items are moved |
