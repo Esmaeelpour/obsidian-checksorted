@@ -92,7 +92,7 @@ export default class DoneZonePlugin extends Plugin {
 	refreshStatusBar(): void {
 		if (!this.statusBarEl) return;
 		this.statusBarEl.setText(
-			this.settings.autoMove ? "DoneZone ●" : "DoneZone ○"
+			this.settings.autoMove ? "DoneZone ✓" : "DoneZone ✗"
 		);
 	}
 
