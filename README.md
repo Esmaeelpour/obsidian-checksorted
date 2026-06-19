@@ -74,22 +74,28 @@ After running Move:
 
 ## Installation
 
-### Manual (until listed in community plugins)
+### Using BRAT (recommended)
 
-1. Run `npm install && npm run build` in this repo
-2. Copy `main.js` and `manifest.json` into your vault at:
-   ```
-   <vault>/.obsidian/plugins/donezone/
-   ```
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) lets you install plugins directly from GitHub without waiting for community store approval.
+
+1. Install **BRAT** from the Obsidian community plugins
+2. Open BRAT settings and click **Add Beta Plugin**
+3. Paste this URL: `https://github.com/Esmaeelpour/obsidian-donezone`
+4. Enable **DoneZone** in **Settings → Community Plugins**
+
+BRAT will also handle updates automatically.
+
+### Manual
+
+1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/Esmaeelpour/obsidian-donezone/releases)
+2. Copy both files into your vault at `.obsidian/plugins/donezone/`
 3. Reload Obsidian and enable **DoneZone** in **Settings → Community Plugins**
 
 ---
 
 ## Credits
 
-DoneZone is a modern rewrite of [obsidian-completed-area](https://github.com/DahaWong/obsidian-completed-area) by [DahaWong](https://github.com/DahaWong), originally released under the MIT license.
-
-The core concept — moving completed to-do items to a separate section — comes entirely from that project. DoneZone updates it to use the current Obsidian Editor API (replacing the deprecated CodeMirror 5 / `activeLeaf` APIs) and adds new features.
+Inspired by [obsidian-completed-area](https://github.com/DahaWong/obsidian-completed-area) by [DahaWong](https://github.com/DahaWong).
 
 ---
 

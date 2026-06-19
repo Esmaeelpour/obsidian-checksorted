@@ -3,7 +3,7 @@
 	"name": "DoneZone",
 	"version": "1.0.0",
 	"minAppVersion": "1.4.0",
-	"description": "DoneZone — move completed to-do items to a separate area. Inspired by obsidian-completed-area by DahaWong.",
+	"description": "Move completed to-do items into a separate done area, keeping your active tasks clean.",
 	"author": "",
 	"authorUrl": "",
 	"fundingUrl": "",
