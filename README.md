@@ -18,7 +18,7 @@ An [Obsidian](https://obsidian.md) plugin that moves completed to-do items into 
 - **Date stamping** — appends a completion date (e.g. `✅ 2026-06-19`) when items are moved
 - **Sort order** — append new items to the bottom or prepend to the top of the completed area
 - **Configurable header** — set the heading level (H1–H6) and name of the completed section
-- **Ribbon icon** — one-click trigger from the left sidebar (can be hidden)
+- **Ribbon icon** — one-click full sync from the left sidebar: returns unchecked items out of the completed area, then moves newly completed ones into it (can be hidden)
 
 ---
 
@@ -35,6 +35,13 @@ All commands are available via the Command Palette (`Ctrl/Cmd + P`):
 | **Clear completed area** | Deletes the completed section and all items in it |
 
 You can assign custom hotkeys to any of these in **Settings → Hotkeys**.
+
+### Ribbon icon
+
+Clicking the DoneZone ribbon icon in the left sidebar runs a **full sync** in one step:
+
+1. Any unchecked `- [ ]` items left in the completed area are returned to the main list (and stray empty checkboxes are cleared).
+2. All checked `- [x]` items in the note body are moved into the completed area.
 
 ### Example
 
