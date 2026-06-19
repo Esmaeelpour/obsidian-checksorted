@@ -9,24 +9,27 @@ An [Obsidian](https://obsidian.md) plugin that moves completed to-do items into 
 
 ## Features
 
-**Organize your tasks**
+A long note collects a graveyard of finished checkboxes. DoneZone clears them out of your way — finished tasks drop into a tidy archive at the bottom, and your active list stays short and readable.
 
-- **Move completed** — collects every checked `- [x]` task into a dedicated completed area at the bottom of the note
-- **Auto-return** — unchecking an item in the completed area sends it straight back to your active list
-- **Restore all** — uncheck and return every completed item in one command
-- **Clear** — remove all completed items and the section header in a single step
+#### Move tasks where they belong
 
-**Hands-free automation**
+Check a task and it slips into a **Completed** section at the foot of your note. Do it on demand from the command palette or ribbon, or turn on **auto-move** and watch each task leave the instant you tick it. Uncheck something by mistake? It quietly returns to your active list on its own.
 
-- **Auto-move on complete** — items jump to the completed area the moment you check them
-- **Ribbon full sync** — one click returns stray unchecked items *and* moves newly completed ones, keeping both lists tidy
-- **Status bar toggle** — see auto-move state at a glance (`✓` / `✗`) and flip it with a click
+#### Sync both ways in one click
 
-**Make it yours**
+The sidebar ribbon runs a full pass: completed tasks move down, anything you un-ticked moves back up, and leftover empty checkboxes are swept away — so neither list ever drifts out of sync.
 
-- **Configurable header** — choose the heading level (H1–H6) and name of the completed section
-- **Date stamping** — append a completion date such as `✅ 2026-06-19`, in any [Moment.js](https://momentjs.com/docs/#/displaying/format/) format
-- **Sort order** — add newly completed items to the bottom or the top of the section
+#### Tidy up in bulk
+
+- **Restore all** — pull every archived task back into the active list at once
+- **Clear** — delete the completed section and everything in it in a single step
+
+#### Shape it to your workflow
+
+- **Custom heading** — name the archive section and pick its level, H1 through H6
+- **Completion dates** — stamp each finished task with a date like `✅ 2026-06-19`, in any [Moment.js](https://momentjs.com/docs/#/displaying/format/) format
+- **Newest first or last** — add completed items to the top or bottom of the archive
+- **Status bar toggle** — flip auto-move on or off and read its state (`✓` / `✗`) at a glance
 
 ---
 
