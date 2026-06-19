@@ -22,15 +22,24 @@ import {
 import { CheckSortedSettings, DEFAULT_SETTINGS } from "./settings";
 import { CheckSortedSettingTab } from "./settingsTab";
 
-const RIBBON_ICON = `<g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-  <rect x="24" y="22" width="52" height="48" rx="13"></rect>
-  <path d="M50 8 V20"></path>
-  <circle cx="50" cy="7" r="4" fill="currentColor" stroke="none"></circle>
-  <path d="M24 41 H17"></path>
-  <path d="M76 41 H83"></path>
-  <circle cx="39" cy="40" r="4.5" fill="currentColor" stroke="none"></circle>
-  <circle cx="61" cy="40" r="4.5" fill="currentColor" stroke="none"></circle>
-  <path d="M41 60 L47 67 L59 53"></path>
+const RIBBON_ICON = `<g transform="scale(0.33333)">
+  <defs>
+    <mask id="checksorted-check-gap">
+      <rect x="0" y="0" width="300" height="300" fill="white"></rect>
+      <polyline points="90,200 140,245 250,110" fill="none" stroke="black" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    </mask>
+  </defs>
+  <g mask="url(#checksorted-check-gap)">
+    <line x1="150" y1="45" x2="150" y2="15" stroke="currentColor" stroke-width="10" stroke-linecap="round"></line>
+    <circle cx="150" cy="15" r="10" fill="currentColor"></circle>
+    <rect x="25" y="100" width="20" height="40" rx="5" fill="currentColor"></rect>
+    <rect x="255" y="100" width="20" height="40" rx="5" fill="currentColor"></rect>
+    <rect x="45" y="45" width="210" height="150" rx="15" fill="none" stroke="currentColor" stroke-width="12"></rect>
+    <circle cx="105" cy="105" r="16" fill="currentColor"></circle>
+    <circle cx="195" cy="105" r="16" fill="currentColor"></circle>
+    <polyline points="115,155 135,165 165,165 185,155" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+  </g>
+  <polyline points="90,200 140,245 250,110" fill="none" stroke="currentColor" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"></polyline>
 </g>`;
 
 export default class CheckSortedPlugin extends Plugin {
