@@ -15,7 +15,7 @@ Check a task and it slips into a **Completed** section at the foot of your note.
 
 #### Sync both ways in one click
 
-The sidebar ribbon runs a full pass: completed tasks move down, anything you un-ticked moves back up, and leftover empty checkboxes are swept away — so neither list ever drifts out of sync.
+The sidebar ribbon runs a full pass: completed tasks move down, anything you un-ticked moves back up, and leftover empty checkboxes are swept away; so neither list ever drifts out of sync.
 
 #### Tidy up in bulk
 
