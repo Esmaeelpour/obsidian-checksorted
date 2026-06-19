@@ -9,8 +9,6 @@ An [Obsidian](https://obsidian.md) plugin that moves completed to-do items into 
 
 ## Features
 
-A long note collects a graveyard of finished checkboxes. DoneZone clears them out of your way — finished tasks drop into a tidy archive at the bottom, and your active list stays short and readable.
-
 #### Move tasks where they belong
 
 Check a task and it slips into a **Completed** section at the foot of your note. Do it on demand from the command palette or ribbon, or turn on **auto-move** and watch each task leave the instant you tick it. Uncheck something by mistake? It quietly returns to your active list on its own.
