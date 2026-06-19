@@ -126,7 +126,7 @@ export default class DoneZonePlugin extends Plugin {
 		const content = editor.getValue();
 		const { main, completedItems: existing } = this.splitContent(content);
 
-		const completedRegex = /^(\s*[-*+] \[[xX]\] .+)$/gm;
+		const completedRegex = /^([ \t]*[-*+] \[[xX]\] .+)\r?\n?/gm;
 		const newItems = [...main.matchAll(completedRegex)].map((m) => m[1]);
 
 		if (newItems.length === 0) {
