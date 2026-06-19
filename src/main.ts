@@ -134,13 +134,15 @@ export default class DoneZonePlugin extends Plugin {
 					prevCursorLine > headerLine &&
 					currentLine <= headerLine;
 
+				if (!this.settings.autoMove) return;
+
 				// returnUncheckedItems fires on explicit checkbox toggle or on exit from completed.
 				// It does NOT fire on lineChanged within the completed section, avoiding cursor chaos
 				// when the user presses Enter or navigates inside that section.
 				if (exitedCompleted || checkboxChanged) {
 					this.returnUncheckedItems(editor, exitedCompleted);
 				}
-				if ((lineChanged || checkboxChanged) && this.settings.autoMove) {
+				if (lineChanged || checkboxChanged) {
 					this.moveCompletedItems(editor, true);
 				}
 			})
@@ -305,6 +307,7 @@ export default class DoneZonePlugin extends Plugin {
 
 		const cleanMain = main
 			.replace(completedRegex, "")
+			.replace(/^[ \t]*[-*+] \[[xX ]\] [ \t]*$/gm, "")
 			.replace(/\n{3,}/g, "\n\n")
 			.trimEnd();
 
