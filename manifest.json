@@ -1,0 +1,11 @@
+{
+	"id": "donezone",
+	"name": "DoneZone",
+	"version": "1.0.0",
+	"minAppVersion": "1.4.0",
+	"description": "DoneZone — move completed to-do items to a separate area. Inspired by obsidian-completed-area by DahaWong.",
+	"author": "",
+	"authorUrl": "",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}
