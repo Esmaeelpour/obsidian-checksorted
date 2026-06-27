@@ -80,18 +80,22 @@ export default class CheckSortedPlugin extends Plugin {
 		this.registerEditorExtension(dateStampExtension(this));
 		this.registerMarkdownPostProcessor((el) => {
 			el.querySelectorAll("li.task-list-item.is-checked").forEach((li) => {
-				li.childNodes.forEach((node) => {
-					if (node.nodeType !== Node.TEXT_NODE) return;
+				const walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+				const hits: { node: Text; idx: number }[] = [];
+				let n: Text | null;
+				while ((n = walker.nextNode() as Text | null)) {
+					const idx = (n.textContent ?? "").indexOf("✅");
+					if (idx !== -1) hits.push({ node: n, idx });
+				}
+				for (const { node, idx } of hits) {
 					const text = node.textContent ?? "";
-					const idx = text.indexOf("✅");
-					if (idx === -1) return;
 					const before = document.createTextNode(text.slice(0, idx));
 					const span = document.createElement("span");
 					span.className = "checksorted-date";
 					span.textContent = text.slice(idx);
 					node.parentNode!.replaceChild(span, node);
 					span.parentNode!.insertBefore(before, span);
-				});
+				}
 			});
 		});
 		this.updateStatusBar();
