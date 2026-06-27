@@ -626,11 +626,26 @@ class DeleteTaskWidget extends WidgetType {
 	}
 }
 
-// Editor extension that marks the "✅ <date>" stamp on completed lines so CSS
-// can cancel the strikethrough that [x] tasks inherit.
+// Widget that renders the date stamp as a replaced element so that no
+// ancestor text-decoration (strikethrough) can paint through it.
+class DateStampWidget extends WidgetType {
+	constructor(private text: string) { super(); }
+
+	toDOM(): HTMLElement {
+		return createSpan({ cls: "checksorted-date", text: this.text });
+	}
+
+	eq(other: DateStampWidget): boolean {
+		return this.text === (other as DateStampWidget).text;
+	}
+
+	ignoreEvent(): boolean { return false; }
+}
+
+// Editor extension that replaces the "✅ <date>" stamp with a widget so the
+// date is immune to strikethrough inherited from [x] task lines.
 function dateStampExtension(plugin: CheckSortedPlugin) {
 	const checkedLine = /^\s*[-*+] \[[xX]\] /;
-	const stampMark = Decoration.mark({ class: "checksorted-date" });
 
 	return ViewPlugin.fromClass(
 		class {
@@ -657,10 +672,13 @@ function dateStampExtension(plugin: CheckSortedPlugin) {
 						if (checkedLine.test(line.text)) {
 							const stampIdx = line.text.indexOf("✅");
 							if (stampIdx !== -1) {
+								const stampText = line.text.slice(stampIdx);
 								builder.add(
 									line.from + stampIdx,
 									line.to,
-									stampMark
+									Decoration.replace({
+										widget: new DateStampWidget(stampText),
+									})
 								);
 							}
 						}
