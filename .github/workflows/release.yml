@@ -19,7 +19,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.x"
+          node-version: "lts/*"
           cache: "npm"
 
       - name: Install dependencies
@@ -53,4 +53,5 @@ jobs:
           gh release create "$tag" \
             --title="$tag" \
             --generate-notes \
+            --clobber \
             main.js manifest.json styles.css
