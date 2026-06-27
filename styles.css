@@ -33,8 +33,10 @@
 	cursor: pointer;
 }
 
-/* Date stamp after ✅ — cancel the strikethrough inherited from [x] items */
+/* Date stamp after ✅ — cancel the strikethrough inherited from [x] items.
+   display:inline-block breaks the text-decoration inheritance chain. */
 .checksorted-date {
+	display: inline-block;
 	text-decoration: none !important;
 }
 
