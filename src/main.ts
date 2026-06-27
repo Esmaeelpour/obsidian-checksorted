@@ -663,7 +663,6 @@ function dateStampExtension(plugin: CheckSortedPlugin) {
 
 			build(view: EditorView): DecorationSet {
 				const builder = new RangeSetBuilder<Decoration>();
-				if (!plugin.settings.dateStamp) return builder.finish();
 
 				for (const { from, to } of view.visibleRanges) {
 					let pos = from;

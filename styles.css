@@ -34,8 +34,11 @@
 }
 
 /* Date stamp after ✅ — no strikethrough (widget replacement in live preview,
-   span wrap in reading view both use this class). */
+   span wrap in reading view both use this class).
+   display:inline-block is required: it creates a new formatting context in
+   Chromium that prevents ancestor text-decoration from painting through. */
 .checksorted-date {
+	display: inline-block;
 	text-decoration: none !important;
 }
 
