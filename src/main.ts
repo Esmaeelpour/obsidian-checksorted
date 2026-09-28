@@ -8,6 +8,7 @@ import {
 	MarkdownView,
 	Notice,
 	Plugin,
+	TFile,
 } from "obsidian";
 import { RangeSetBuilder } from "@codemirror/state";
 import {
@@ -49,6 +50,8 @@ export default class CheckSortedPlugin extends Plugin {
 	private isProcessing = false;
 	private lastCursorLine = -1;
 	private lastCheckboxSnapshot = '';
+	// Files whose checkbox was just toggled in Reading view, with the click time.
+	private pendingReadingToggles = new Map<string, number>();
 
 	private handleCheckboxMouseDown = (evt: MouseEvent) => {
 		if (!(evt.ctrlKey || evt.metaKey)) return;
@@ -92,6 +95,21 @@ export default class CheckSortedPlugin extends Plugin {
 		} catch (e) {
 			console.error("CheckSorted: Failed to handle Ctrl/Cmd+click on mousedown", e);
 		}
+	};
+
+	// Reading view toggles a checkbox by rewriting the file rather than through an
+	// editor, so remember the file here and sort it once that write lands.
+	private handleReadingViewClick = (evt: MouseEvent) => {
+		if (!this.settings.autoMove || !this.settings.readingViewAutoMove || evt.ctrlKey || evt.metaKey) return;
+		const target = evt.target as HTMLElement | null;
+		if (!target?.matches?.(".markdown-preview-view input.task-list-item-checkbox")) return;
+
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.getMode() === "preview" && view.file && view.containerEl.contains(target)) {
+				this.pendingReadingToggles.set(view.file.path, Date.now());
+			}
+		});
 	};
 
 	private handleCheckboxClick = (evt: MouseEvent) => {
@@ -170,6 +188,7 @@ export default class CheckSortedPlugin extends Plugin {
 	private registerCheckboxListeners(doc: Document): void {
 		this.registerDomEvent(doc, "mousedown", this.handleCheckboxMouseDown, true);
 		this.registerDomEvent(doc, "click", this.handleCheckboxClick, true);
+		this.registerDomEvent(doc, "click", this.handleReadingViewClick);
 	}
 
 	updateRibbonIcon(): void {
@@ -221,6 +240,17 @@ export default class CheckSortedPlugin extends Plugin {
 	}
 
 	private setupAutoMove(): void {
+		this.registerEvent(
+			this.app.vault.on("modify", (file) => {
+				if (!(file instanceof TFile)) return;
+				const clickedAt = this.pendingReadingToggles.get(file.path);
+				if (clickedAt === undefined) return;
+				this.pendingReadingToggles.delete(file.path);
+				if (Date.now() - clickedAt > 5000 || !this.settings.autoMove || !this.settings.readingViewAutoMove) return;
+				void this.sortFileAfterReadingToggle(file);
+			})
+		);
+
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
 				this.lastCursorLine = -1;
@@ -275,6 +305,28 @@ export default class CheckSortedPlugin extends Plugin {
 		);
 	}
 
+	private async sortFileAfterReadingToggle(file: TFile): Promise<void> {
+		await this.app.vault.process(file, (data) => {
+			const crlf = data.includes("\r\n");
+			const content = crlf ? data.replace(/\r\n/g, "\n") : data;
+			const sorted = this.autoSortContent(content);
+			return crlf ? sorted.replace(/\n/g, "\r\n") : sorted;
+		});
+	}
+
+	// The same pass auto-move runs in the editor, applied to a whole note.
+	private autoSortContent(content: string): string {
+		if (this.settings.sortMethod === "in-place") return this.sortItemsInPlaceContent(content);
+		if (!this.settings.keepSubtasks) {
+			const returned = this.legacyReturnContent(content, 0, false)?.content ?? content;
+			return this.legacyMoveContent(returned, 0)?.content ?? returned;
+		}
+		let doc = toDocLines(content);
+		doc = this.returnUncheckedLines(doc, false)?.lines ?? doc;
+		doc = this.moveCompletedLines(doc)?.lines ?? doc;
+		return fromDocLines(doc);
+	}
+
 	private getCheckboxSnapshot(content: string): string {
 		return (content.match(/^[ \t]*[-*+] \[[xX /]\]/gm) ?? []).join('');
 	}
@@ -283,76 +335,58 @@ export default class CheckSortedPlugin extends Plugin {
 	// cleanEmpty=false: only return items with real content (called on checkbox toggle).
 	private returnUncheckedItems(editor: Editor, cleanEmpty = false): void {
 		if (this.isProcessing) return;
+		if (!this.settings.keepSubtasks) {
+			const legacy = this.legacyReturnContent(editor.getValue(), editor.getCursor().line, cleanEmpty);
+			if (legacy) this.applyLegacy(editor, legacy);
+			return;
+		}
+		const result = this.returnUncheckedLines(toDocLines(editor.getValue()), cleanEmpty);
+		if (result) this.applyDocLines(editor, result);
+	}
 
-		const content = editor.getValue();
-		const headerRegex = this.getHeaderRegex();
-		const match = headerRegex.exec(content);
+	// Sends every unchecked task in the completed area back to the main list,
+	// together with its sub-tasks (reopened) and indented content.
+	private returnUncheckedLines(doc: DocLine[], cleanEmpty: boolean): DocResult | null {
+		const { main, header, completed } = this.splitDoc(doc);
+		if (!header) return null;
 
-		if (!match) return;
+		const kept: DocLine[] = [];
+		const returned: DocLine[] = [];
+		let changed = false;
 
-		const main = content.substring(0, match.index).trimEnd();
-		const rawAfterHeader = content.substring(match.index + match[0].length);
-		const afterHeader = rawAfterHeader.trimStart();
+		const walk = (lines: DocLine[], from: number, to: number): void => {
+			for (let i = from; i < to; ) {
+				const line = lines[i];
+				const state = taskState(line.text);
+				if (state === null && !/^[ \t]*(?:[-*+]|\d+[.)]) /.test(line.text)) {
+					kept.push(line);
+					i++;
+					continue;
+				}
+				const end = Math.min(blockEnd(lines, i), to);
+				if (state === " " || state === "/") {
+					if (/^[ \t]*[-*+] \[.\] \S/.test(line.text)) {
+						returned.push(...reopenBlock(dedent(lines.slice(i, end), indentWidth(line.text))));
+						changed = true;
+						i = end;
+						continue;
+					}
+					if (cleanEmpty) {
+						// Drop the empty checkbox Obsidian inserts on Enter; keep anything under it.
+						changed = true;
+						i++;
+						continue;
+					}
+				}
+				kept.push(line);
+				walk(lines, i + 1, end);
+				i = end;
+			}
+		};
+		walk(completed, 0, completed.length);
 
-		// With cleanEmpty, .* also catches empty "- [ ] " continuation lines.
-		const uncheckedRegex = cleanEmpty
-			? /^([ \t]*[-*+] \[[ /]\] .*)\r?\n?/gm
-			: /^([ \t]*[-*+] \[[ /]\] .+)\r?\n?/gm;
-		const uncheckedMatches = [...afterHeader.matchAll(uncheckedRegex)];
-
-		if (uncheckedMatches.length === 0) return;
-
-		// Also strip any empty "- [ ] " continuation lines that Obsidian inserts when
-		// Enter is pressed on an unchecked item. Otherwise a stray empty checkbox is left
-		// behind in the completed section and renders with a bullet (● ☐).
-		const cleanedSection = afterHeader
-			.replace(uncheckedRegex, "")
-			.replace(/^[ \t]*[-*+] \[[ /]\][ \t]*(\r?\n|$)/gm, "")
-			.trimEnd();
-
-		const hasContent = /^[ \t]*[-*+] \[[ /]\] \S/;
-		const returnedItems = uncheckedMatches
-			.filter((m) => hasContent.test(m[1]))
-			.map((m) => m[1].replace(/\s*✅.*$/, ""));
-
-		const newMain =
-			returnedItems.length > 0
-				? main
-					? `${main}\n${returnedItems.join("\n")}`
-					: returnedItems.join("\n")
-				: main;
-		const newContent = cleanedSection
-			? `${newMain}\n\n${this.getHeaderStr()}\n${cleanedSection}`
-			: newMain;
-
-		// Cursor adjustment: start from pre-change cursor, subtract lines removed above it
-		// (in completed), add lines inserted into main before it (returned items, only relevant
-		// when cursor is already in completed and the section shifts down).
-		const preCursorLine = editor.getCursor().line;
-		const headerLine = content.substring(0, match.index).split("\n").length - 1;
-		const cursorInCompleted = preCursorLine > headerLine;
-
-		const leadingTrim = rawAfterHeader.length - afterHeader.length;
-		const afterHeaderDocLine =
-			content.substring(0, match.index + match[0].length + leadingTrim).split("\n").length - 1;
-
-		// Use the same predicate as uncheckedRegex so we only count actually-removed lines.
-		const removedPredicate = cleanEmpty
-			? /^[ \t]*[-*+] \[[ /]\] /
-			: /^[ \t]*[-*+] \[[ /]\] \S/;
-		const removedAboveCursor = afterHeader
-			.split("\n")
-			.slice(0, Math.max(0, preCursorLine - afterHeaderDocLine))
-			.filter((l) => removedPredicate.test(l)).length;
-
-		const cursorLine = Math.max(
-			0,
-			preCursorLine - removedAboveCursor + (cursorInCompleted ? returnedItems.length : 0)
-		);
-
-		this.isProcessing = true;
-		this.setValuePreservingScroll(editor, newContent, cursorLine);
-		this.isProcessing = false;
+		if (!changed) return null;
+		return this.composeDoc([...trimTrailingBlank(main), ...returned], header, kept);
 	}
 
 	private getHeaderStr(): string {
@@ -368,28 +402,36 @@ export default class CheckSortedPlugin extends Plugin {
 		return new RegExp(`^${hashes}\\s+${name}\\s*$`, "m");
 	}
 
-	private splitContent(content: string): {
-		main: string;
-		completedItems: string[];
-	} {
+	// Splits a note at the completed-area heading.
+	private splitDoc(lines: DocLine[]): { main: DocLine[]; header: DocLine | null; completed: DocLine[] } {
 		const headerRegex = this.getHeaderRegex();
-		const match = headerRegex.exec(content);
+		const idx = lines.findIndex((l) => headerRegex.test(l.text));
+		if (idx < 0) return { main: lines, header: null, completed: [] };
+		return { main: lines.slice(0, idx), header: lines[idx], completed: lines.slice(idx + 1) };
+	}
 
-		if (!match) {
-			return { main: content, completedItems: [] };
-		}
+	// Joins the main list and the completed area back into a note; the heading is
+	// dropped when the completed area is empty.
+	private composeDoc(main: DocLine[], header: DocLine | null, completed: DocLine[]): DocResult {
+		const oldHeader = header?.src ?? -1;
+		const body = trimTrailingBlank(main);
+		const done = trimBlankEdges(completed);
+		if (done.length === 0) return { lines: body, oldHeader, newHeader: -1 };
 
-		const main = content.substring(0, match.index).trimEnd();
-		const afterHeader = content
-			.substring(match.index + match[0].length)
-			.trimStart();
+		const heading = header ?? { text: this.getHeaderStr(), src: -1 };
+		if (body.length === 0) return { lines: [heading, ...done], oldHeader, newHeader: 0 };
+		return {
+			lines: [...body, { text: "", src: -1 }, heading, ...done],
+			oldHeader,
+			newHeader: body.length + 1,
+		};
+	}
 
-		const itemRegex = /^(\s*[-*+] \[[xX]\] .+)$/gm;
-		const completedItems = [...afterHeader.matchAll(itemRegex)].map(
-			(m) => m[1]
-		);
-
-		return { main, completedItems };
+	private applyDocLines(editor: Editor, result: DocResult): void {
+		const cursor = mapCursor(result.lines, editor.getCursor().line, result.oldHeader, result.newHeader);
+		this.isProcessing = true;
+		this.setValuePreservingScroll(editor, fromDocLines(result.lines), cursor);
+		this.isProcessing = false;
 	}
 
 	moveCompletedItems(editor: Editor, silent = false): void {
@@ -400,55 +442,60 @@ export default class CheckSortedPlugin extends Plugin {
 			return;
 		}
 
-		const content = editor.getValue();
-		const cursor = editor.getCursor();
-		const { main, completedItems: existing } = this.splitContent(content);
-
-		const completedRegex = /^([ \t]*[-*+] \[[xX]\] \S.*)\r?\n?/gm;
-		const newItems = [...main.matchAll(completedRegex)].map((m) => m[1]);
-
-		if (newItems.length === 0) {
-			if (!silent) new Notice("No completed items to move.");
+		if (!this.settings.keepSubtasks) {
+			const legacy = this.legacyMoveContent(editor.getValue(), editor.getCursor().line);
+			if (!legacy) {
+				if (!silent) new Notice("No completed items to move.");
+				return;
+			}
+			this.applyLegacy(editor, legacy);
 			return;
 		}
 
-		// Count [x] lines removed above the cursor so we can land on the right line
-		const singleItemRegex = /^[ \t]*[-*+] \[[xX]\] \S.*/;
-		const mainLines = main.split("\n");
-		let removedAbove = 0;
-		for (let i = 0; i < Math.min(cursor.line, mainLines.length); i++) {
-			if (singleItemRegex.test(mainLines[i])) removedAbove++;
+		const result = this.moveCompletedLines(toDocLines(editor.getValue()));
+		if (!result) {
+			if (!silent) new Notice("No completed items to move.");
+			return;
 		}
+		this.applyDocLines(editor, result);
+	}
 
-		const stamped = newItems.map((item) => {
-			if (this.settings.dateStamp && !/ ✅ \S/.test(item)) {
-				return `${item} ✅ ${formatNow(this.settings.dateFormat)}`;
+	// Moves every checked task in the main list into the completed area. A task
+	// moves together with its indented content; checking a parent moves (and
+	// completes) its whole sub-tree, while a checked sub-task under an open
+	// parent moves on its own.
+	private moveCompletedLines(doc: DocLine[]): DocResult | null {
+		const { main, header, completed } = this.splitDoc(doc);
+
+		const kept: DocLine[] = [];
+		const moved: DocLine[] = [];
+		for (let i = 0; i < main.length; ) {
+			if (!CHECKED_TASK.test(main[i].text)) {
+				kept.push(main[i]);
+				i++;
+				continue;
 			}
-			return item;
-		});
-		const allItems =
-			this.settings.sortOrder === "prepend"
-				? [...stamped, ...existing]
-				: [...existing, ...stamped];
+			const end = blockEnd(main, i);
+			const block = dedent(main.slice(i, end), indentWidth(main[i].text)).map((line, j) => {
+				if (j === 0) {
+					const stamp = this.settings.dateStamp && !/ ✅ \S/.test(line.text);
+					return stamp ? { text: `${line.text} ✅ ${formatNow(this.settings.dateFormat)}`, src: line.src } : line;
+				}
+				const state = taskState(line.text);
+				return state === " " || state === "/" ? { text: withTaskState(line.text, "x"), src: line.src } : line;
+			});
+			moved.push(...block);
+			i = end;
+		}
+		if (moved.length === 0) return null;
 
-		const cleanMain = main
-			.replace(completedRegex, "")
-			.replace(/^[ \t]*[-*+] \[[xX ]\] [ \t]*$/gm, "")
-			.replace(/\n{3,}/g, "\n\n")
-			.trimEnd();
-
-		const completedSection = `${this.getHeaderStr()}\n${allItems.join("\n")}`;
-		const newContent = cleanMain
-			? `${cleanMain}\n\n${completedSection}`
-			: completedSection;
-
-		this.isProcessing = true;
-		this.setValuePreservingScroll(
-			editor,
-			newContent,
-			Math.max(0, cursor.line - removedAbove)
+		// Drop empty checkbox lines left in the main list and squeeze blank runs.
+		const cleanMain = collapseBlankRuns(
+			kept.map((line) => (/^[ \t]*[-*+] \[[xX ]\] [ \t]*$/.test(line.text) ? { text: "", src: line.src } : line))
 		);
-		this.isProcessing = false;
+		const existing = trimBlankEdges(completed);
+		const done = this.settings.sortOrder === "prepend" ? [...moved, ...existing] : [...existing, ...moved];
+		return this.composeDoc(cleanMain, header, done);
 	}
 
 	private sortItemsInPlace(editor: Editor, silent = false): void {
@@ -670,28 +717,23 @@ export default class CheckSortedPlugin extends Plugin {
 			this.restoreCompletedItemsInPlace(editor);
 			return;
 		}
+		if (!this.settings.keepSubtasks) {
+			this.legacyRestoreCompletedItems(editor);
+			return;
+		}
 
-		const content = editor.getValue();
-		const { main, completedItems } = this.splitContent(content);
+		const { main, header, completed } = this.splitDoc(toDocLines(editor.getValue()));
+		const count = completed.filter((l) => CHECKED_TASK.test(l.text)).length;
 
-		if (completedItems.length === 0) {
+		if (count === 0) {
 			new Notice("No completed items to restore.");
 			return;
 		}
 
-		const restored = completedItems.map((item) =>
-			item.replace(/\[[xX]\]/, "[ ]").replace(/\s*✅.*$/, "")
-		);
+		const restored = reopenBlock(trimBlankEdges(completed));
+		this.applyDocLines(editor, this.composeDoc([...trimTrailingBlank(main), ...restored], header, []));
 
-		this.isProcessing = true;
-		this.setValuePreservingScroll(editor, `${main}\n${restored.join("\n")}`.trim());
-		this.isProcessing = false;
-
-		new Notice(
-			`Restored ${completedItems.length} item${
-				completedItems.length !== 1 ? "s" : ""
-			}.`
-		);
+		new Notice(`Restored ${count} item${count !== 1 ? "s" : ""}.`);
 	}
 
 	private restoreCompletedItemsInPlace(editor: Editor): void {
@@ -723,24 +765,22 @@ export default class CheckSortedPlugin extends Plugin {
 			this.clearCompletedItemsInPlace(editor);
 			return;
 		}
+		if (!this.settings.keepSubtasks) {
+			this.legacyClearCompletedArea(editor);
+			return;
+		}
 
-		const content = editor.getValue();
-		const { main, completedItems } = this.splitContent(content);
+		const { main, header, completed } = this.splitDoc(toDocLines(editor.getValue()));
+		const count = completed.filter((l) => CHECKED_TASK.test(l.text)).length;
 
-		if (completedItems.length === 0) {
+		if (count === 0) {
 			new Notice("Completed area is already empty.");
 			return;
 		}
 
-		this.isProcessing = true;
-		this.setValuePreservingScroll(editor, main.trimEnd());
-		this.isProcessing = false;
+		this.applyDocLines(editor, this.composeDoc(main, header, []));
 
-		new Notice(
-			`Cleared ${completedItems.length} item${
-				completedItems.length !== 1 ? "s" : ""
-			}.`
-		);
+		new Notice(`Cleared ${count} item${count !== 1 ? "s" : ""}.`);
 	}
 
 	private clearCompletedItemsInPlace(editor: Editor): void {
@@ -790,6 +830,197 @@ export default class CheckSortedPlugin extends Plugin {
 		new Notice(`Cleared ${count} completed item${count !== 1 ? "s" : ""}.`);
 	}
 
+	// ---- 1.1.x behaviour, used while "Keep sub-tasks with their parent" is off ----
+	// Each checked line moves on its own. Kept verbatim from 1.1.9 (apart from
+	// working on text instead of the editor) so existing users see no change.
+
+	private applyLegacy(editor: Editor, result: { content: string; cursorLine: number }): void {
+		this.isProcessing = true;
+		this.setValuePreservingScroll(editor, result.content, result.cursorLine);
+		this.isProcessing = false;
+	}
+
+	private legacyReturnContent(
+		content: string,
+		preCursorLine: number,
+		cleanEmpty: boolean
+	): { content: string; cursorLine: number } | null {
+		const headerRegex = this.getHeaderRegex();
+		const match = headerRegex.exec(content);
+
+		if (!match) return null;
+
+		const main = content.substring(0, match.index).trimEnd();
+		const rawAfterHeader = content.substring(match.index + match[0].length);
+		const afterHeader = rawAfterHeader.trimStart();
+
+		// With cleanEmpty, .* also catches empty "- [ ] " continuation lines.
+		const uncheckedRegex = cleanEmpty
+			? /^([ \t]*[-*+] \[[ /]\] .*)\r?\n?/gm
+			: /^([ \t]*[-*+] \[[ /]\] .+)\r?\n?/gm;
+		const uncheckedMatches = [...afterHeader.matchAll(uncheckedRegex)];
+
+		if (uncheckedMatches.length === 0) return null;
+
+		// Also strip any empty "- [ ] " continuation lines that Obsidian inserts when
+		// Enter is pressed on an unchecked item. Otherwise a stray empty checkbox is left
+		// behind in the completed section and renders with a bullet (● ☐).
+		const cleanedSection = afterHeader
+			.replace(uncheckedRegex, "")
+			.replace(/^[ \t]*[-*+] \[[ /]\][ \t]*(\r?\n|$)/gm, "")
+			.trimEnd();
+
+		const hasContent = /^[ \t]*[-*+] \[[ /]\] \S/;
+		const returnedItems = uncheckedMatches
+			.filter((m) => hasContent.test(m[1]))
+			.map((m) => m[1].replace(/\s*✅.*$/, ""));
+
+		const newMain =
+			returnedItems.length > 0
+				? main
+					? `${main}\n${returnedItems.join("\n")}`
+					: returnedItems.join("\n")
+				: main;
+		const newContent = cleanedSection
+			? `${newMain}\n\n${this.getHeaderStr()}\n${cleanedSection}`
+			: newMain;
+
+		// Cursor adjustment: start from pre-change cursor, subtract lines removed above it
+		// (in completed), add lines inserted into main before it (returned items, only relevant
+		// when cursor is already in completed and the section shifts down).
+		const headerLine = content.substring(0, match.index).split("\n").length - 1;
+		const cursorInCompleted = preCursorLine > headerLine;
+
+		const leadingTrim = rawAfterHeader.length - afterHeader.length;
+		const afterHeaderDocLine =
+			content.substring(0, match.index + match[0].length + leadingTrim).split("\n").length - 1;
+
+		// Use the same predicate as uncheckedRegex so we only count actually-removed lines.
+		const removedPredicate = cleanEmpty
+			? /^[ \t]*[-*+] \[[ /]\] /
+			: /^[ \t]*[-*+] \[[ /]\] \S/;
+		const removedAboveCursor = afterHeader
+			.split("\n")
+			.slice(0, Math.max(0, preCursorLine - afterHeaderDocLine))
+			.filter((l) => removedPredicate.test(l)).length;
+
+		const cursorLine = Math.max(
+			0,
+			preCursorLine - removedAboveCursor + (cursorInCompleted ? returnedItems.length : 0)
+		);
+
+		return { content: newContent, cursorLine };
+	}
+
+	private legacySplitContent(content: string): {
+		main: string;
+		completedItems: string[];
+	} {
+		const headerRegex = this.getHeaderRegex();
+		const match = headerRegex.exec(content);
+
+		if (!match) {
+			return { main: content, completedItems: [] };
+		}
+
+		const main = content.substring(0, match.index).trimEnd();
+		const afterHeader = content
+			.substring(match.index + match[0].length)
+			.trimStart();
+
+		const itemRegex = /^(\s*[-*+] \[[xX]\] .+)$/gm;
+		const completedItems = [...afterHeader.matchAll(itemRegex)].map(
+			(m) => m[1]
+		);
+
+		return { main, completedItems };
+	}
+
+	private legacyMoveContent(content: string, cursorLine: number): { content: string; cursorLine: number } | null {
+		const { main, completedItems: existing } = this.legacySplitContent(content);
+
+		const completedRegex = /^([ \t]*[-*+] \[[xX]\] \S.*)\r?\n?/gm;
+		const newItems = [...main.matchAll(completedRegex)].map((m) => m[1]);
+
+		if (newItems.length === 0) return null;
+
+		// Count [x] lines removed above the cursor so we can land on the right line
+		const singleItemRegex = /^[ \t]*[-*+] \[[xX]\] \S.*/;
+		const mainLines = main.split("\n");
+		let removedAbove = 0;
+		for (let i = 0; i < Math.min(cursorLine, mainLines.length); i++) {
+			if (singleItemRegex.test(mainLines[i])) removedAbove++;
+		}
+
+		const stamped = newItems.map((item) => {
+			if (this.settings.dateStamp && !/ ✅ \S/.test(item)) {
+				return `${item} ✅ ${formatNow(this.settings.dateFormat)}`;
+			}
+			return item;
+		});
+		const allItems =
+			this.settings.sortOrder === "prepend"
+				? [...stamped, ...existing]
+				: [...existing, ...stamped];
+
+		const cleanMain = main
+			.replace(completedRegex, "")
+			.replace(/^[ \t]*[-*+] \[[xX ]\] [ \t]*$/gm, "")
+			.replace(/\n{3,}/g, "\n\n")
+			.trimEnd();
+
+		const completedSection = `${this.getHeaderStr()}\n${allItems.join("\n")}`;
+		const newContent = cleanMain
+			? `${cleanMain}\n\n${completedSection}`
+			: completedSection;
+
+		return { content: newContent, cursorLine: Math.max(0, cursorLine - removedAbove) };
+	}
+
+	private legacyRestoreCompletedItems(editor: Editor): void {
+		const content = editor.getValue();
+		const { main, completedItems } = this.legacySplitContent(content);
+
+		if (completedItems.length === 0) {
+			new Notice("No completed items to restore.");
+			return;
+		}
+
+		const restored = completedItems.map((item) =>
+			item.replace(/\[[xX]\]/, "[ ]").replace(/\s*✅.*$/, "")
+		);
+
+		this.isProcessing = true;
+		this.setValuePreservingScroll(editor, `${main}\n${restored.join("\n")}`.trim());
+		this.isProcessing = false;
+
+		new Notice(
+			`Restored ${completedItems.length} item${
+				completedItems.length !== 1 ? "s" : ""
+			}.`
+		);
+	}
+
+	private legacyClearCompletedArea(editor: Editor): void {
+		const content = editor.getValue();
+		const { main, completedItems } = this.legacySplitContent(content);
+
+		if (completedItems.length === 0) {
+			new Notice("Completed area is already empty.");
+			return;
+		}
+
+		this.isProcessing = true;
+		this.setValuePreservingScroll(editor, main.trimEnd());
+		this.isProcessing = false;
+
+		new Notice(
+			`Cleared ${completedItems.length} item${
+				completedItems.length !== 1 ? "s" : ""
+			}.`
+		);
+	}
+
 	private setValuePreservingScroll(
 		editor: Editor,
 		content: string,
@@ -821,6 +1052,136 @@ export default class CheckSortedPlugin extends Plugin {
 
 function escapeRegex(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// A document line tagged with its original line number (-1 for inserted lines),
+// so the cursor can follow its line through a rearrangement.
+interface DocLine {
+	text: string;
+	src: number;
+}
+
+const TASK_LINE = /^([ \t]*[-*+] \[)(.)(\].*)$/;
+const CHECKED_TASK = /^[ \t]*[-*+] \[[xX]\] \S/;
+const DATE_STAMP = /\s*✅.*$/;
+
+function toDocLines(content: string): DocLine[] {
+	return content.split("\n").map((text, src) => ({ text, src }));
+}
+
+function fromDocLines(lines: DocLine[]): string {
+	return lines.map((l) => l.text).join("\n");
+}
+
+function isBlank(line: DocLine): boolean {
+	return line.text.trim() === "";
+}
+
+function indentWidth(text: string): number {
+	let width = 0;
+	for (const ch of text) {
+		if (ch === " ") width++;
+		else if (ch === "\t") width += 4;
+		else break;
+	}
+	return width;
+}
+
+function taskState(text: string): string | null {
+	return TASK_LINE.exec(text)?.[2] ?? null;
+}
+
+function withTaskState(text: string, state: string): string {
+	return text.replace(TASK_LINE, (_, before: string, _state: string, after: string) => before + state + after);
+}
+
+// End (exclusive) of the block starting at `start`: the line itself plus every
+// following line indented deeper than it — sub-tasks, notes, links, images —
+// including blank lines between them, but not trailing blank lines.
+function blockEnd(lines: DocLine[], start: number): number {
+	const base = indentWidth(lines[start].text);
+	let last = start;
+	for (let i = start + 1; i < lines.length; i++) {
+		if (isBlank(lines[i])) continue;
+		if (indentWidth(lines[i].text) <= base) break;
+		last = i;
+	}
+	return last + 1;
+}
+
+// Removes `width` columns of leading indentation from every line.
+function dedent(lines: DocLine[], width: number): DocLine[] {
+	return lines.map((line) => {
+		let i = 0;
+		let removed = 0;
+		while (i < line.text.length && removed < width) {
+			const ch = line.text[i];
+			if (ch === " ") removed++;
+			else if (ch === "\t") removed += 4;
+			else break;
+			i++;
+		}
+		return { text: line.text.slice(i), src: line.src };
+	});
+}
+
+interface DocResult {
+	lines: DocLine[];
+	oldHeader: number; // original line of the completed heading, -1 if there was none
+	newHeader: number; // index of the heading in `lines`, -1 if it was dropped
+}
+
+function trimTrailingBlank(lines: DocLine[]): DocLine[] {
+	let end = lines.length;
+	while (end > 0 && isBlank(lines[end - 1])) end--;
+	return lines.slice(0, end);
+}
+
+function trimBlankEdges(lines: DocLine[]): DocLine[] {
+	let start = 0;
+	let end = lines.length;
+	while (start < end && isBlank(lines[start])) start++;
+	while (end > start && isBlank(lines[end - 1])) end--;
+	return lines.slice(start, end);
+}
+
+function collapseBlankRuns(lines: DocLine[]): DocLine[] {
+	return lines.filter((line, i) => !(isBlank(line) && i > 0 && isBlank(lines[i - 1])));
+}
+
+// Unchecks every task in a block and strips completion date stamps.
+function reopenBlock(lines: DocLine[]): DocLine[] {
+	return lines.map((line) => {
+		const state = taskState(line.text);
+		if (state === null) return line;
+		const text = state === "x" || state === "X" ? withTaskState(line.text, " ") : line.text;
+		return { text: text.replace(DATE_STAMP, ""), src: line.src };
+	});
+}
+
+// New line index for the cursor after a rearrangement. The cursor stays in its
+// section (main list or completed area): it keeps its own line if that line
+// stayed put, otherwise takes the next line that did, otherwise the closest
+// line above. If its section is gone entirely, it follows its own line.
+function mapCursor(lines: DocLine[], cursor: number, oldHeader: number, newHeader: number): number {
+	const inMain = oldHeader < 0 || cursor < oldHeader;
+	let best = -1;
+	lines.forEach((line, i) => {
+		if (line.src < cursor) return;
+		const fromMain = oldHeader < 0 || line.src < oldHeader;
+		const toMain = newHeader < 0 || i < newHeader;
+		if (fromMain !== inMain || toMain !== inMain) return;
+		if (best < 0 || line.src < lines[best].src) best = i;
+	});
+	if (best >= 0) return best;
+
+	const own = lines.findIndex((l) => l.src === cursor);
+	if (own >= 0) return own;
+
+	lines.forEach((line, i) => {
+		if (line.src >= 0 && line.src < cursor && (best < 0 || line.src > lines[best].src)) best = i;
+	});
+	return Math.max(0, best);
 }
 
 interface CheckboxSuggestion {
@@ -915,9 +1276,12 @@ class CheckboxSuggest extends EditorSuggest<CheckboxSuggestion> {
 
 // A clickable "×" rendered at the end of a checkbox line that deletes that line.
 class DeleteTaskWidget extends WidgetType {
+	// When set, the button stays visible on touch screens (which have no hover).
+	constructor(private touchVisible: boolean) { super(); }
+
 	toDOM(view: EditorView): HTMLElement {
 		const btn = createSpan({
-			cls: "checksorted-delete-task",
+			cls: this.touchVisible ? "checksorted-delete-task checksorted-touch-visible" : "checksorted-delete-task",
 			text: "×",
 			attr: { "aria-label": "Delete task" },
 		});
@@ -936,8 +1300,8 @@ class DeleteTaskWidget extends WidgetType {
 		return btn;
 	}
 
-	eq(): boolean {
-		return true;
+	eq(other: DeleteTaskWidget): boolean {
+		return this.touchVisible === other.touchVisible;
 	}
 
 	ignoreEvent(): boolean {
@@ -1042,7 +1406,7 @@ function deleteButtonExtension(plugin: CheckSortedPlugin) {
 								line.to,
 								line.to,
 								Decoration.widget({
-									widget: new DeleteTaskWidget(),
+									widget: new DeleteTaskWidget(plugin.settings.touchDeleteButton),
 									side: 1,
 								})
 							);

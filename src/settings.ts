@@ -13,6 +13,10 @@ export interface CheckSortedSettings {
 	dateFormat: string;
 	sortOrder: "append" | "prepend";
 	sortMethod: "global" | "in-place";
+	// Added in 1.2.0. Off by default so existing users see no change.
+	keepSubtasks: boolean;
+	readingViewAutoMove: boolean;
+	touchDeleteButton: boolean;
 }
 
 export const DEFAULT_SETTINGS: CheckSortedSettings = {
@@ -27,6 +31,9 @@ export const DEFAULT_SETTINGS: CheckSortedSettings = {
 	dateFormat: "YYYY-MM-DD",
 	sortOrder: "append",
 	sortMethod: "global",
+	keepSubtasks: false,
+	readingViewAutoMove: false,
+	touchDeleteButton: false,
 };
 
 // Obsidian types its bundled moment as a namespace import, which is not callable

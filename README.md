@@ -13,6 +13,34 @@ Check a task and it slips into a **Completed** section at the foot of your note.
 
 ![Completed tasks moved into their own section](docs/img/move.png)
 
+#### Keep sub-tasks with their parent
+
+Turn on **Keep sub-tasks with their parent** and a task travels with everything indented under it: sub-tasks, notes, links and images. Check a parent and its whole group moves down, sub-tasks marked done too; uncheck it and the group comes back, reopened. Check a single sub-task while its parent is still open and just that sub-task moves.
+
+```markdown
+- [ ] Buy milk
+- [x] Groceries
+    Shop closes at 8
+    - [ ] eggs
+    - [ ] bread
+```
+
+becomes
+
+```markdown
+- [ ] Buy milk
+
+## Completed
+- [x] Groceries
+    Shop closes at 8
+    - [x] eggs
+    - [x] bread
+```
+
+#### Works in Reading view too
+
+Turn on **Auto-move in Reading view** and ticking a box while reading a note sorts it just like in the editor.
+
 #### Sync both ways in one click
 
 The sidebar ribbon runs a full pass: completed tasks move down, anything you un-ticked moves back up, and leftover empty checkboxes are swept away; so neither list ever drifts out of sync.
@@ -25,7 +53,7 @@ Start typing in a checkbox and CheckSorted suggests matching tasks from anywhere
 
 #### Delete a task in one click
 
-Hover a checkbox line in the editor and a **×** appears on the right, just like Google Keep. Click it to remove that task; no selecting, no backspacing.
+Hover a checkbox line in the editor and a **×** appears on the right, just like Google Keep. Click it to remove that task; no selecting, no backspacing. Phones and tablets have no hover, so turn on **Show delete button on touch screens** to keep the × visible there.
 
 ![Click-to-delete button on a checkbox line](docs/img/delete.png)
 
@@ -98,8 +126,11 @@ Unchecking an item in the completed area automatically returns it to the main li
 | Header name | `Completed` | Text of the completed section heading |
 | Show ribbon icon | On | Display the trigger icon in the left sidebar |
 | Show status bar toggle | On | Show `CheckSorted ✓ / ✗` in the bottom status bar — click to toggle auto-move |
+| Keep sub-tasks with their parent | Off | Move a task together with its sub-tasks and indented notes; checking a parent completes its sub-tasks, unchecking brings the group back |
 | Auto-move on complete | On | Automatically move items to the completed area when checked |
+| Auto-move in Reading view | Off | Also move items when a checkbox is ticked in Reading view |
 | Show delete button | On | Show a × on the right of each checkbox line in the editor; click it to delete that task |
+| Show delete button on touch screens | Off | Keep the × visible on phones and tablets, which have no hover |
 | Task autocomplete | On | Suggest matching tasks while typing in a checkbox; selecting one moves it to the line you're typing |
 | Date stamp | Off | Append `✅ <date>` when items are moved |
 | Date format | `YYYY-MM-DD` | [Moment.js](https://momentjs.com/docs/#/displaying/format/) format for the stamp |

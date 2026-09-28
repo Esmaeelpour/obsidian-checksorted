@@ -22,6 +22,14 @@
 	background-color: var(--text-error);
 }
 
+/* Touch screens have no hover, so optionally keep the button visible and easier to tap. */
+@media (hover: none), (pointer: coarse) {
+	.checksorted-delete-task.checksorted-touch-visible {
+		opacity: 0.55;
+		padding: 2px 8px;
+	}
+}
+
 /* Task autocomplete suggestion */
 .checksorted-suggest-state {
 	opacity: 0.6;

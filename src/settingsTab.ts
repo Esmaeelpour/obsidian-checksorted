@@ -60,6 +60,12 @@ export class CheckSortedSettingTab extends PluginSettingTab {
 									options: { append: "Append (bottom)", prepend: "Prepend (top)" },
 								},
 							},
+							{
+								name: "Keep sub-tasks with their parent",
+								desc: "Move a task together with its sub-tasks and indented notes. Checking a parent completes and moves its sub-tasks too; unchecking it brings them all back. When off, each checked line moves on its own.",
+								visible: isGlobal,
+								control: { type: "toggle", key: "keepSubtasks" },
+							},
 						],
 					},
 					{
@@ -111,6 +117,12 @@ export class CheckSortedSettingTab extends PluginSettingTab {
 								control: { type: "toggle", key: "showDeleteButton" },
 							},
 							{
+								name: "Show delete button on touch screens",
+								desc: "Touch screens have no hover, so keep the × visible on phones and tablets.",
+								visible: () => this.plugin.settings.showDeleteButton,
+								control: { type: "toggle", key: "touchDeleteButton" },
+							},
+							{
 								name: "Task autocomplete",
 								desc: "While typing in a checkbox, suggest matching tasks from elsewhere in the note. Selecting one moves that task to the line you are typing.",
 								control: { type: "toggle", key: "autocomplete" },
@@ -131,6 +143,12 @@ export class CheckSortedSettingTab extends PluginSettingTab {
 								name: "Auto-move on complete",
 								desc: "Automatically move items to the completed area when a checkbox is checked.",
 								control: { type: "toggle", key: "autoMove" },
+							},
+							{
+								name: "Auto-move in Reading view",
+								desc: "Also move items when a checkbox is ticked in Reading view.",
+								visible: () => this.plugin.settings.autoMove,
+								control: { type: "toggle", key: "readingViewAutoMove" },
 							},
 						],
 					},
@@ -155,6 +173,9 @@ export class CheckSortedSettingTab extends PluginSettingTab {
 		if (key === "showIcon") this.plugin.updateRibbonIcon();
 		else if (key === "showStatusBar") this.plugin.updateStatusBar();
 		else if (key === "autoMove") this.plugin.refreshStatusBar();
-		else if (key === "showDeleteButton") this.app.workspace.updateOptions();
-		else if (key === "sortMethod" || key === "dateStamp") this.refreshDomState();
-	}}
+		else if (key === "showDeleteButton" || key === "touchDeleteButton") this.app.workspace.updateOptions();
+
+		// Settings that show or hide other settings.
+		if (["sortMethod", "dateStamp", "autoMove", "showDeleteButton"].includes(key)) this.refreshDomState();
+	}
+}
