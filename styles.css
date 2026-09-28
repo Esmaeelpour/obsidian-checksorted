@@ -37,9 +37,11 @@
    span wrap in reading view both use this class).
    display:inline-block is required: it creates a new formatting context in
    Chromium that prevents ancestor text-decoration from painting through. */
-.checksorted-date {
+.checksorted-date,
+.markdown-rendered .task-list-item.is-checked .checksorted-date,
+.markdown-source-view.mod-cm6 .HyperMD-task-line[data-task]:not([data-task=" "]) .checksorted-date {
 	display: inline-block;
-	text-decoration: none !important;
+	text-decoration: none;
 }
 
 /* Settings tab bar */

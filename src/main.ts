@@ -137,7 +137,7 @@ export default class CheckSortedPlugin extends Plugin {
 		this.registerEditorExtension(dateStampExtension(this));
 		this.registerMarkdownPostProcessor((el) => {
 			el.querySelectorAll("li.task-list-item.is-checked").forEach((li) => {
-				const walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+				const walker = li.doc.createTreeWalker(li, NodeFilter.SHOW_TEXT);
 				const hits: { node: Text; idx: number }[] = [];
 				let n: Text | null;
 				while ((n = walker.nextNode() as Text | null)) {
@@ -148,8 +148,8 @@ export default class CheckSortedPlugin extends Plugin {
 				}
 				for (const { node, idx } of hits) {
 					const text = node.textContent ?? "";
-					const before = document.createTextNode(text.slice(0, idx));
-					const span = document.createElement("span");
+					const before = node.doc.createTextNode(text.slice(0, idx));
+					const span = node.doc.createElement("span");
 					span.className = "checksorted-date";
 					span.textContent = text.slice(idx);
 					node.parentNode!.replaceChild(span, node);
@@ -160,13 +160,18 @@ export default class CheckSortedPlugin extends Plugin {
 		this.updateStatusBar();
 		this.setupAutoMove();
 
-		document.addEventListener("mousedown", this.handleCheckboxMouseDown, true);
-		document.addEventListener("click", this.handleCheckboxClick, true);
+		// Listen in the main window, any popout windows already open, and any opened later.
+		const docs = new Set<Document>([this.app.workspace.containerEl.doc]);
+		this.app.workspace.iterateAllLeaves((leaf) => docs.add(leaf.view.containerEl.doc));
+		docs.forEach((doc) => this.registerCheckboxListeners(doc));
+		this.registerEvent(
+			this.app.workspace.on("window-open", (win) => this.registerCheckboxListeners(win.doc))
+		);
 	}
 
-	onunload() {
-		document.removeEventListener("mousedown", this.handleCheckboxMouseDown, true);
-		document.removeEventListener("click", this.handleCheckboxClick, true);
+	private registerCheckboxListeners(doc: Document): void {
+		this.registerDomEvent(doc, "mousedown", this.handleCheckboxMouseDown, true);
+		this.registerDomEvent(doc, "click", this.handleCheckboxClick, true);
 	}
 
 	updateRibbonIcon(): void {
@@ -952,7 +957,7 @@ class DateStampWidget extends WidgetType {
 	}
 
 	eq(other: DateStampWidget): boolean {
-		return this.text === (other as DateStampWidget).text;
+		return this.text === other.text;
 	}
 
 	ignoreEvent(): boolean { return false; }
