@@ -1,6 +1,6 @@
-import { App, moment, PluginSettingTab, SettingDefinitionItem } from "obsidian";
+import { App, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import type CheckSortedPlugin from "./main";
-import { CheckSortedSettings, DEFAULT_SETTINGS } from "./settings";
+import { CheckSortedSettings, DEFAULT_SETTINGS, formatNow } from "./settings";
 
 type SettingKey = keyof CheckSortedSettings;
 
@@ -73,7 +73,7 @@ export class CheckSortedSettingTab extends PluginSettingTab {
 							},
 							{
 								name: "Date format",
-								desc: `Moment.js format string. Preview: ${moment().format(this.plugin.settings.dateFormat)}`,
+								desc: `Moment.js format string. Preview: ${formatNow(this.plugin.settings.dateFormat)}`,
 								visible: hasDateStamp,
 								control: { type: "text", key: "dateFormat", placeholder: "YYYY-MM-DD" },
 							},

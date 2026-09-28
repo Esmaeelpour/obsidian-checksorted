@@ -1,3 +1,6 @@
+import { moment } from "obsidian";
+import type { Moment } from "moment";
+
 export interface CheckSortedSettings {
 	completedAreaHierarchy: string;
 	completedAreaName: string;
@@ -25,3 +28,12 @@ export const DEFAULT_SETTINGS: CheckSortedSettings = {
 	sortOrder: "append",
 	sortMethod: "global",
 };
+
+// Obsidian types its bundled moment as a namespace import, which is not callable
+// when esModuleInterop is on, so give it an explicit call signature.
+const now = moment as unknown as () => Moment;
+
+/** Formats the current date/time with a Moment.js format string. */
+export function formatNow(format: string): string {
+	return now().format(format);
+}

@@ -6,7 +6,6 @@ import {
 	EditorSuggestContext,
 	EditorSuggestTriggerInfo,
 	MarkdownView,
-	moment,
 	Notice,
 	Plugin,
 } from "obsidian";
@@ -19,7 +18,7 @@ import {
 	ViewUpdate,
 	WidgetType,
 } from "@codemirror/view";
-import { CheckSortedSettings, DEFAULT_SETTINGS } from "./settings";
+import { CheckSortedSettings, DEFAULT_SETTINGS, formatNow } from "./settings";
 import { CheckSortedSettingTab } from "./settingsTab";
 
 const RIBBON_ICON = `<g transform="scale(0.33333)">
@@ -423,7 +422,7 @@ export default class CheckSortedPlugin extends Plugin {
 
 		const stamped = newItems.map((item) => {
 			if (this.settings.dateStamp && !/ ✅ \S/.test(item)) {
-				return `${item} ✅ ${moment().format(this.settings.dateFormat)}`;
+				return `${item} ✅ ${formatNow(this.settings.dateFormat)}`;
 			}
 			return item;
 		});
@@ -550,7 +549,7 @@ export default class CheckSortedPlugin extends Plugin {
 						else if (checkbox === "x" || checkbox === "X") {
 							state = 2;
 							if (this.settings.dateStamp && !/ ✅ \S/.test(line)) {
-								line = line + ` ✅ ${moment().format(this.settings.dateFormat)}`;
+								line = line + ` ✅ ${formatNow(this.settings.dateFormat)}`;
 							}
 						}
 
