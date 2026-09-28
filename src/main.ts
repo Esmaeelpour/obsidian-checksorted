@@ -65,8 +65,9 @@ export default class CheckSortedPlugin extends Plugin {
 		if (!view || !view.editor) return;
 
 		const editor = view.editor;
-		const cm = (editor as any).cm;
-		if (!cm || typeof cm.posAtDOM !== "function") return;
+		// Obsidian exposes the underlying CodeMirror view on the editor.
+		const cm = (editor as Editor & { cm?: EditorView }).cm;
+		if (!cm) return;
 
 		evt.preventDefault();
 		evt.stopPropagation();
@@ -79,7 +80,7 @@ export default class CheckSortedPlugin extends Plugin {
 			const lineNum = editor.offsetToPos(pos).line;
 			const lineText = editor.getLine(lineNum);
 
-			const match = /^(\s*[-*+] )\[([ xX\/])\] (.*)$/.exec(lineText);
+			const match = /^(\s*[-*+] )\[([ xX/])\] (.*)$/.exec(lineText);
 			if (match) {
 				const prefix = match[1];
 				const state = match[2];
@@ -149,9 +150,7 @@ export default class CheckSortedPlugin extends Plugin {
 				for (const { node, idx } of hits) {
 					const text = node.textContent ?? "";
 					const before = node.doc.createTextNode(text.slice(0, idx));
-					const span = node.doc.createElement("span");
-					span.className = "checksorted-date";
-					span.textContent = text.slice(idx);
+					const span = (node.doc.win as typeof window).createSpan({ cls: "checksorted-date", text: text.slice(idx) });
 					node.parentNode!.replaceChild(span, node);
 					span.parentNode!.insertBefore(before, span);
 				}
@@ -278,7 +277,7 @@ export default class CheckSortedPlugin extends Plugin {
 	}
 
 	private getCheckboxSnapshot(content: string): string {
-		return (content.match(/^[ \t]*[-*+] \[[xX \/]\]/gm) ?? []).join('');
+		return (content.match(/^[ \t]*[-*+] \[[xX /]\]/gm) ?? []).join('');
 	}
 
 	// cleanEmpty=true: also discard empty "- [ ] " continuation lines (called on exit from completed).
@@ -298,8 +297,8 @@ export default class CheckSortedPlugin extends Plugin {
 
 		// With cleanEmpty, .* also catches empty "- [ ] " continuation lines.
 		const uncheckedRegex = cleanEmpty
-			? /^([ \t]*[-*+] \[[ \/]\] .*)\r?\n?/gm
-			: /^([ \t]*[-*+] \[[ \/]\] .+)\r?\n?/gm;
+			? /^([ \t]*[-*+] \[[ /]\] .*)\r?\n?/gm
+			: /^([ \t]*[-*+] \[[ /]\] .+)\r?\n?/gm;
 		const uncheckedMatches = [...afterHeader.matchAll(uncheckedRegex)];
 
 		if (uncheckedMatches.length === 0) return;
@@ -309,10 +308,10 @@ export default class CheckSortedPlugin extends Plugin {
 		// behind in the completed section and renders with a bullet (● ☐).
 		const cleanedSection = afterHeader
 			.replace(uncheckedRegex, "")
-			.replace(/^[ \t]*[-*+] \[[ \/]\][ \t]*(\r?\n|$)/gm, "")
+			.replace(/^[ \t]*[-*+] \[[ /]\][ \t]*(\r?\n|$)/gm, "")
 			.trimEnd();
 
-		const hasContent = /^[ \t]*[-*+] \[[ \/]\] \S/;
+		const hasContent = /^[ \t]*[-*+] \[[ /]\] \S/;
 		const returnedItems = uncheckedMatches
 			.filter((m) => hasContent.test(m[1]))
 			.map((m) => m[1].replace(/\s*✅.*$/, ""));
@@ -340,8 +339,8 @@ export default class CheckSortedPlugin extends Plugin {
 
 		// Use the same predicate as uncheckedRegex so we only count actually-removed lines.
 		const removedPredicate = cleanEmpty
-			? /^[ \t]*[-*+] \[[ \/]\] /
-			: /^[ \t]*[-*+] \[[ \/]\] \S/;
+			? /^[ \t]*[-*+] \[[ /]\] /
+			: /^[ \t]*[-*+] \[[ /]\] \S/;
 		const removedAboveCursor = afterHeader
 			.split("\n")
 			.slice(0, Math.max(0, preCursorLine - afterHeaderDocLine))
@@ -495,7 +494,7 @@ export default class CheckSortedPlugin extends Plugin {
 	private sortItemsInPlaceContent(content: string): string {
 		const lines = content.split("\n");
 		let outLines: string[] = [];
-		const listItemRegex = /^([ \t]*)([-*+]|\d+\.) (?:\[([ xX\/])\] )?(.*)$/;
+		const listItemRegex = /^([ \t]*)([-*+]|\d+\.) (?:\[([ xX/])\] )?(.*)$/;
 
 		interface Node {
 			indent: number;
@@ -636,7 +635,7 @@ export default class CheckSortedPlugin extends Plugin {
 		}
 
 		// m[0] is the "<indent>- [<state>] " prefix of the line being typed.
-		const prefix = /^\s*[-*+] \[[ xX\/]\] /.exec(lines[targetLine]);
+		const prefix = /^\s*[-*+] \[[ xX/]\] /.exec(lines[targetLine]);
 		if (!prefix) return;
 
 		lines[targetLine] = `${prefix[0]}${text}`;
@@ -700,7 +699,7 @@ export default class CheckSortedPlugin extends Plugin {
 		const content = editor.getValue();
 		const lines = content.split("\n");
 		let count = 0;
-		const lineRegex = /^([ \t]*[-*+] )\[[xX\/]\] (.*)$/;
+		const lineRegex = /^([ \t]*[-*+] )\[[xX/]\] (.*)$/;
 		for (let i = 0; i < lines.length; i++) {
 			const match = lineRegex.exec(lines[i]);
 			if (match) {
@@ -850,7 +849,7 @@ class CheckboxSuggest extends EditorSuggest<CheckboxSuggestion> {
 		if (!this.plugin.settings.autocomplete) return null;
 
 		const line = editor.getLine(cursor.line);
-		const prefix = /^\s*[-*+] \[[ xX\/]\] /.exec(line);
+		const prefix = /^\s*[-*+] \[[ xX/]\] /.exec(line);
 		if (!prefix) return null;
 
 		const textStart = prefix[0].length;
@@ -870,7 +869,7 @@ class CheckboxSuggest extends EditorSuggest<CheckboxSuggestion> {
 		const query = context.query.toLowerCase();
 		const currentLine = context.start.line;
 		const lines = context.editor.getValue().split("\n");
-		const itemRegex = /^\s*[-*+] \[([ xX\/])\] (.*)$/;
+		const itemRegex = /^\s*[-*+] \[([ xX/])\] (.*)$/;
 
 		const seen = new Set<string>();
 		const results: CheckboxSuggestion[] = [];
@@ -1015,7 +1014,7 @@ function dateStampExtension(plugin: CheckSortedPlugin) {
 
 // Editor extension that puts a DeleteTaskWidget at the end of every checkbox line.
 function deleteButtonExtension(plugin: CheckSortedPlugin) {
-	const checkbox = /^\s*[-*+] \[[ xX\/]\]\s/;
+	const checkbox = /^\s*[-*+] \[[ xX/]\]\s/;
 
 	return ViewPlugin.fromClass(
 		class {
